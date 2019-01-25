@@ -1,35 +1,34 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Service to verify session tokens for the Rentalated clients
+Description: Service to verify session tokens for Rentalated clients
 
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
     Function:
         Timeout: 5
 
 Resources:
     LambdaFunction:
-        Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+        Type: AWS::Serverless::Function 
         Properties:
             CodeUri: token_service/
             Handler: app.token_verifier
             Runtime: python3.7
             Events:
                 PostRequest:
-                    Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+                    Type: Api
                     Properties:
                         Path: /token_service
                         Method: post
 
 Outputs:
     LambdaFunctionAPI:
-      Description: "API Gateway endpoint URL for Prod stage for Hello World function"
+      Description: "API Gateway endpoint URL for Prod stage"
       Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/token_service/"
 
     LambdaFunction:
-      Description: "Hello World Lambda Function ARN"
+      Description: "Lambda Function ARN"
       Value: !GetAtt LambdaFunction.Arn
 
     LambdaFunctionIamRole:
-      Description: "Implicit IAM Role created for Hello World function"
+      Description: "Implicit IAM Role for the lambda."
       Value: !GetAtt LambdaFunctionRole.Arn

@@ -5,6 +5,23 @@ import base64
 import requests
 from botocore.exceptions import ClientError
 
+def is_revoked(token):
+    table_name = "rentalated-accounts-db-RevokedTokensTable-1VIEA9RVNWJKG"
+    ## ^^ this is a slight problem
+    client = boto3.client("dynamodb")
+    response = client.get_item(
+        TableName=table_name,
+        Key={
+            'accessToken': {
+                'S': token
+            }
+        }
+    )
+    if response["Item"]:
+        return True
+    else:
+        return False
+
 def decode_auth_token(auth_header):
     """
     Validates the auth token
@@ -12,36 +29,46 @@ def decode_auth_token(auth_header):
     :return: integer|string
     """
     errorResponse = {
-        "valid": False,
-        "payload": None,
-        "error_message": "Bad auth token."
+        "statusCode": 400,
+        "body": {
+            "valid": False,
+            "payload": None,
+            "error_message": "Bad auth token."
+        }
     }
     successResponse = {
-        "valid": True,
-        "payload": None,
-        "error_message": None
+        "statusCode": 200,
+        "body": {
+            "valid": True,
+            "payload": None,
+            "error_message": None
+        }
     }
-
     response = errorResponse
 
-    print(auth_header)
-    print("???")
     SECRET_KEY = get_secret()
 
+    # if the auth header exists, has the "Bearer <token>" pattern, the parsed token 
+        # decodes properly with the secret, and the token is not expired, 
+        # then we toggle the response from error to success.
     if auth_header:
         if len(auth_header.split()) > 1:
             auth_token = auth_header.split()[1]
             try:
                 payload = jwt.decode(auth_token, SECRET_KEY, algorithms=["HS256"])
-                # if RevokedToken.check(auth_token):
-                if not False:
-                    successResponse["payload"] = payload["sub"]
-                    response = successResponse            
+                if not is_revoked(auth_token):
+                    successResponse["body"]["payload"] = payload["sub"]
+                    response = successResponse     
+                else: 
+                    response["body"]["error_message"] = "Unauthorized: user not logged in."       
             except (jwt.ExpiredSignatureError,  jwt.InvalidTokenError) as error:
-                response["error_message"] = error
+                response["body"]["error_message"] = error
+    response["body"] = json.dumps(response["body"])
     return response
 
 def get_secret():
+    # CURTIS: this function is basically provided by AWS when you store a secret
+        # in secretsmanager
 
     secret_name = "secret_key"
     region_name = "us-east-2"
@@ -92,80 +119,17 @@ def get_secret():
             decoded_binary_secret = base64.b64decode(get_secret_value_response['SecretBinary'])
             return decoded_binary_secret
 
-
 def token_verifier(event, context):
-    """Sample pure Lambda function
-
-    Parameters
-    ----------
-    event: dict, required
-        API Gateway Lambda Proxy Input Format
-
-        {
-            "resource": "Resource path",
-            "path": "Path parameter",
-            "httpMethod": "Incoming request's method name"
-            "headers": {Incoming request headers}
-            "queryStringParameters": {query string parameters }
-            "pathParameters":  {path parameters}
-            "stageVariables": {Applicable stage variables}
-            "requestContext": {Request context, including authorizer-returned key-value pairs}
-            "body": "A JSON string of the request payload."
-            "isBase64Encoded": "A boolean flag to indicate if the applicable request payload is Base64-encode"
+    try: 
+        body = json.loads(event["body"])
+        auth_header = body["auth_header"]
+    except Exception as e: 
+        print(e)
+        return {
+            "statusCode": 400,
+            "body": "Could not parse auth header from request. \
+                Request body should be a json string with the auth header \
+                of your own incoming request sent under the key auth_header."
         }
-
-        https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
-
-    context: object, required
-        Lambda Context runtime methods and attributes
-
-    Attributes
-    ----------
-
-    context.aws_request_id: str
-         Lambda request ID
-    context.client_context: object
-         Additional context when invoked through AWS Mobile SDK
-    context.function_name: str
-         Lambda function name
-    context.function_version: str
-         Function version identifier
-    context.get_remaining_time_in_millis: function
-         Time in milliseconds before function times out
-    context.identity:
-         Cognito identity provider context when invoked through AWS Mobile SDK
-    context.invoked_function_arn: str
-         Function ARN
-    context.log_group_name: str
-         Cloudwatch Log group name
-    context.log_stream_name: str
-         Cloudwatch Log stream name
-    context.memory_limit_in_mb: int
-        Function memory
-
-        https://docs.aws.amazon.com/lambda/latest/dg/python-context-object.html
-
-    Returns
-    ------
-    API Gateway Lambda Proxy Output Format: dict
-        'statusCode' and 'body' are required
-
-        {
-            "isBase64Encoded": true | false,
-            "statusCode": httpStatusCode,
-            "headers": {"headerName": "headerValue", ...},
-            "body": "..."
-        }
-
-        # api-gateway-simple-proxy-for-lambda-output-format
-        https: // docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html
-    """
-    auth_header = event["body"]
-    return decode_auth_token(auth_header)
-
-    return {
-        "statusCode": 200,
-        "body": json.dumps(
-            {"message": "hello curlded", "location": ip.text.replace("\n", ""),"secret": get_secret()}
-        ),
-    }
+    finally: 
+        return decode_auth_token(auth_header)
