@@ -3,7 +3,19 @@ import json
 import boto3
 import base64
 import requests
+import traceback
 from botocore.exceptions import ClientError
+
+def generate_response(body, status_code=200, headers={}):
+    headers.update({
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+    })
+    return {
+        "statusCode": status_code,
+        "body": body,
+        "headers": headers
+    }
 
 def is_revoked(token):
     table_name = "rentalated-accounts-db-RevokedTokensTable-1VIEA9RVNWJKG"
@@ -17,33 +29,29 @@ def is_revoked(token):
             }
         }
     )
-    if response["Item"]:
+    print(response)
+    if response.get("Item"):
         return True
     else:
         return False
 
-def decode_auth_token(auth_header):
+def decode_auth_token(auth_token):
     """
     Validates the auth token
     :param auth_token:
     :return: integer|string
     """
-    errorResponse = {
-        "statusCode": 400,
-        "body": {
+    errorResponse = generate_response({
             "valid": False,
             "payload": None,
             "error_message": "Bad auth token."
-        }
-    }
-    successResponse = {
-        "statusCode": 200,
-        "body": {
+        }, 400)
+    successResponse = generate_response({
             "valid": True,
             "payload": None,
             "error_message": None
-        }
-    }
+        })
+
     response = errorResponse
 
     SECRET_KEY = get_secret()
@@ -51,18 +59,15 @@ def decode_auth_token(auth_header):
     # if the auth header exists, has the "Bearer <token>" pattern, the parsed token 
         # decodes properly with the secret, and the token is not expired, 
         # then we toggle the response from error to success.
-    if auth_header:
-        if len(auth_header.split()) > 1:
-            auth_token = auth_header.split()[1]
-            try:
-                payload = jwt.decode(auth_token, SECRET_KEY, algorithms=["HS256"])
-                if not is_revoked(auth_token):
-                    successResponse["body"]["payload"] = payload["sub"]
-                    response = successResponse     
-                else: 
-                    response["body"]["error_message"] = "Unauthorized: user not logged in."       
-            except (jwt.ExpiredSignatureError,  jwt.InvalidTokenError) as error:
-                response["body"]["error_message"] = error
+    try:
+        payload = jwt.decode(auth_token, SECRET_KEY, algorithms=["HS256"])
+        if not is_revoked(auth_token):
+            successResponse["body"]["payload"] = payload["sub"]
+            response = successResponse     
+        else: 
+            response["body"]["error_message"] = "Unauthorized: user not logged in."       
+    except (jwt.ExpiredSignatureError,  jwt.InvalidTokenError) as error:
+        response["body"]["error_message"] = error
     response["body"] = json.dumps(response["body"])
     return response
 
@@ -123,13 +128,9 @@ def token_verifier(event, context):
     try: 
         body = json.loads(event["body"])
         auth_header = body["auth_header"]
-    except Exception as e: 
-        print(e)
-        return {
-            "statusCode": 400,
-            "body": "Could not parse auth header from request. \
-                Request body should be a json string with the auth header \
-                of your own incoming request sent under the key auth_header."
-        }
-    finally: 
         return decode_auth_token(auth_header)
+    except Exception as e: 
+        print(traceback.format_exc())
+        return generate_response(json.dumps({"error": "Could not parse auth header from request. \
+                Request body should be a json string with the auth header \
+                of your own incoming request sent under the key auth_header."}), 400)

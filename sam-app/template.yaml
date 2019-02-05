@@ -1,10 +1,14 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Service to verify session tokens for Rentalated clients
-
 Globals:
-    Function:
-        Timeout: 5
+  Api:
+    # enable CORS; to make more specific, change the origin wildcard
+    # to a particular domain name, e.g. "'www.example.com'"
+    Cors:
+      AllowMethods: "'*'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
 
 Resources:
     LambdaFunction:
@@ -13,12 +17,17 @@ Resources:
             CodeUri: token_service/
             Handler: app.token_verifier
             Runtime: python3.7
+            Timeout: 3
+            Policies: 
+                - AmazonDynamoDBFullAccess
+                - SecretsManagerReadWrite
             Events:
                 PostRequest:
                     Type: Api
                     Properties:
                         Path: /token_service
                         Method: post
+
 
 Outputs:
     LambdaFunctionAPI:

@@ -1,4 +1,5 @@
 cd sam-app
+sam build --use-container 
 aws s3 mb s3://rentalated-lambda-functions
 sam package \
     --output-template-file packaged.yaml \

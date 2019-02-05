@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Service to verify session tokens for Rentalated clients
+Globals:
+  Api:
+    Cors:
+      AllowHeaders: '''*'''
+      AllowMethods: '''*'''
+      AllowOrigin: '''*'''
+Outputs:
+  LambdaFunction:
+    Description: Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - LambdaFunction
+      - Arn
+  LambdaFunctionAPI:
+    Description: API Gateway endpoint URL for Prod stage
+    Value:
+      Fn::Sub: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/token_service/
+  LambdaFunctionIamRole:
+    Description: Implicit IAM Role for the lambda.
+    Value:
+      Fn::GetAtt:
+      - LambdaFunctionRole
+      - Arn
+Resources:
+  LambdaFunction:
+    Properties:
+      CodeUri: s3://rentalated-lambda-functions/d367775c4b6c34aad802025fcbb604f2
+      Events:
+        PostRequest:
+          Properties:
+            Method: post
+            Path: /token_service
+          Type: Api
+      Handler: app.token_verifier
+      Policies:
+      - AmazonDynamoDBFullAccess
+      - SecretsManagerReadWrite
+      Runtime: python3.7
+      Timeout: 3
+    Type: AWS::Serverless::Function
+Transform: AWS::Serverless-2016-10-31
