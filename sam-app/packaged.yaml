@@ -26,7 +26,7 @@ Outputs:
 Resources:
   LambdaFunction:
     Properties:
-      CodeUri: s3://rentalated-lambda-functions/d367775c4b6c34aad802025fcbb604f2
+      CodeUri: s3://rentalated-lambda-functions/d2c2475026f3ee06cc6f0aa972e9b845
       Events:
         PostRequest:
           Properties:

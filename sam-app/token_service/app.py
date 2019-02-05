@@ -3,7 +3,6 @@ import json
 import boto3
 import base64
 import requests
-import traceback
 from botocore.exceptions import ClientError
 
 def generate_response(body, status_code=200, headers={}):
@@ -29,7 +28,6 @@ def is_revoked(token):
             }
         }
     )
-    print(response)
     if response.get("Item"):
         return True
     else:
@@ -55,6 +53,8 @@ def decode_auth_token(auth_token):
     response = errorResponse
 
     SECRET_KEY = get_secret()
+    
+    print('auth_token', auth_token)
 
     # if the auth header exists, has the "Bearer <token>" pattern, the parsed token 
         # decodes properly with the secret, and the token is not expired, 
@@ -67,7 +67,7 @@ def decode_auth_token(auth_token):
         else: 
             response["body"]["error_message"] = "Unauthorized: user not logged in."       
     except (jwt.ExpiredSignatureError,  jwt.InvalidTokenError) as error:
-        response["body"]["error_message"] = error
+        response["body"]["error_message"] = error.__repr__()
     response["body"] = json.dumps(response["body"])
     return response
 
@@ -128,9 +128,9 @@ def token_verifier(event, context):
     try: 
         body = json.loads(event["body"])
         auth_header = body["auth_header"]
-        return decode_auth_token(auth_header)
+        auth_token = auth_header.split(' ')[1]
+        return decode_auth_token(auth_token)
     except Exception as e: 
-        print(traceback.format_exc())
         return generate_response(json.dumps({"error": "Could not parse auth header from request. \
                 Request body should be a json string with the auth header \
-                of your own incoming request sent under the key auth_header."}), 400)
+                of your own incoming request, of the form 'Bearer + <TOKEN>' sent under the key auth_header."}), 400)
